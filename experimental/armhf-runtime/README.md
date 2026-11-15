@@ -14,6 +14,16 @@ other generally useful PortMaster libraries as dependency inventory supports
 them. Per-port libraries should remain with their ports unless evidence shows
 they are broadly shared. The output is an experiment, not a supported runtime.
 
+> **Apple Silicon build warning:** The documented ARM64 Docker/Podman setup on
+> M-series Macs cannot complete the ARMHF package build by itself. Installing
+> Ubuntu's `:armhf` packages can run ARM32 post-installation binaries (for
+> example, `python3.12-minimal`), and ARM64 containers do not automatically
+> provide ARM32 execution. The build fails with an `Exec format error` unless
+> working ARMHF user-mode emulation is registered through QEMU/binfmt. Building
+> the AArch64 artifacts is unaffected. This describes the current documented
+> setup; a Mac with correctly configured ARMHF emulation may be able to build
+> the ARMHF artifacts.
+
 ## Build and export
 
 From this directory, use Podman or Docker with BuildKit/local output support:
