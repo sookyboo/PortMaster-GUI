@@ -17,13 +17,34 @@ esac
 command -v podman >/dev/null || { echo "podman is required" >&2; exit 1; }
 
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/retrodeck-test-zip.XXXXXX")"
-trap 'rm -rf "$WORK_DIR"' EXIT
 mkdir -m 700 "$WORK_DIR/runtime" "$WORK_DIR/storage" "$WORK_DIR/runroot"
 export XDG_RUNTIME_DIR="$WORK_DIR/runtime"
 
 # Keep Podman's runtime state out of the host's possibly read-only
 # /run/user/$UID. The vfs driver is slower but works without overlay setup.
 podman_cmd=(podman --root "$WORK_DIR/storage" --runroot "$WORK_DIR/runroot" --storage-driver vfs)
+
+cleanup() {
+  [[ -d "$WORK_DIR" ]] || return 0
+
+  # This Podman instance has a unique storage root inside WORK_DIR, so reset
+  # only that private store before removing the remaining temporary files.
+  if "${podman_cmd[@]}" system reset --force >/dev/null 2>&1; then
+    rm -rf -- "$WORK_DIR" 2>/dev/null && return 0
+  fi
+
+  # Rootless container layers can be owned by subordinate UIDs on the host.
+  # If Podman's reset fails, remove the private tree from its user namespace.
+  if "${podman_cmd[@]}" unshare rm -rf -- "$WORK_DIR" 2>/dev/null; then
+    return 0
+  fi
+  chmod -R u+rwX -- "$WORK_DIR" 2>/dev/null || true
+  rm -rf -- "$WORK_DIR" 2>/dev/null || {
+    echo "Could not clean temporary Podman directory: $WORK_DIR" >&2
+    return 1
+  }
+}
+trap cleanup EXIT
 
 mkdir -p "$WORK_DIR/tools/$TOOL_ARCH"
 "${podman_cmd[@]}" build \
