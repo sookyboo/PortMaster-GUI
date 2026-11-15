@@ -20,18 +20,21 @@ command -v podman >/dev/null || { echo "podman is required" >&2; exit 1; }
 
 umask 077
 BUILD_ROOT="${RD_BUILD_CACHE_DIR:-$REPO_DIR/build/retrodeck-test-zip}"
-mkdir -p "$BUILD_ROOT/podman-cache/$TOOL_ARCH" "$BUILD_ROOT/runs"
+mkdir -p "$BUILD_ROOT/podman-cache/$TOOL_ARCH" \
+  "$BUILD_ROOT/podman-runroot/$TOOL_ARCH" "$BUILD_ROOT/runs"
 BUILD_ROOT="$(cd "$BUILD_ROOT" && pwd)"
 CACHE_ROOT="$BUILD_ROOT/podman-cache/$TOOL_ARCH/storage"
+RUN_ROOT="$BUILD_ROOT/podman-runroot/$TOOL_ARCH"
 WORK_DIR="$(mktemp -d "$BUILD_ROOT/runs/retrodeck-test-zip.XXXXXX")"
-mkdir -m 700 "$WORK_DIR/runtime" "$WORK_DIR/runroot" "$WORK_DIR/tmp"
+mkdir -m 700 "$WORK_DIR/runtime" "$WORK_DIR/tmp"
 export XDG_RUNTIME_DIR="$WORK_DIR/runtime"
 export TMPDIR="$WORK_DIR/tmp"
 
 # Preserve Podman's image/layer cache between runs, while keeping the runtime
-# socket and runroot private to this invocation. Use the configured storage
-# driver instead of forcing VFS, which duplicates layers and consumes extra disk.
-podman_cmd=(podman --root "$CACHE_ROOT" --runroot "$WORK_DIR/runroot")
+# socket and exported artifacts private to this invocation. Podman requires a
+# persistent graphroot to keep the same runroot path across invocations. Use
+# the configured storage driver instead of forcing VFS, which duplicates layers.
+podman_cmd=(podman --root "$CACHE_ROOT" --runroot "$RUN_ROOT")
 if [[ -n "${RD_PODMAN_STORAGE_DRIVER:-}" ]]; then
   podman_cmd+=(--storage-driver "$RD_PODMAN_STORAGE_DRIVER")
 fi

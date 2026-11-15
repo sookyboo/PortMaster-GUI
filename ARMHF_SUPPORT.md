@@ -168,9 +168,9 @@ PortMaster release. An ARM64 machine can test the AArch64 RetroDECK bundle;
 CI remains responsible for also building and including the x86_64 helper
 artifacts from its native runner.
 
-The local script keeps Podman's per-architecture layer cache in the ignored
-`build/retrodeck-test-zip/podman-cache/` directory. Per-run sockets, runroot,
-and exported artifacts also live under ignored `build/retrodeck-test-zip/`, so
+The local script keeps Podman's per-architecture layer cache and matching
+runroot in the ignored `build/retrodeck-test-zip/` directory. Per-run sockets
+and exported artifacts also live there, so
 the build does not place its temporary container store on a small `/tmp`
 filesystem. Podman uses its configured storage driver; the script does not
 force `vfs`, which can duplicate layers and use much more disk. The first
@@ -187,6 +187,12 @@ Only per-run files are removed when the script exits. The Podman layer cache
 persists between runs; clear it with Podman's `system reset` using the same
 architecture-specific `--root` under `build/retrodeck-test-zip/podman-cache/`
 when you explicitly want to discard the cached build layers.
+
+The first run after switching from the earlier temporary-runroot script may
+report a database runroot mismatch. Reset that old cache once with Podman's
+`system reset`, passing the old runroot path shown after `database run root`
+in the error. Subsequent runs use the stable
+`build/retrodeck-test-zip/podman-runroot/<arch>/` path.
 
 The mod's Panfrost detection is intentionally separate from packaging. On a
 Panfrost RetroDECK Flatpak, a successful launch should log
