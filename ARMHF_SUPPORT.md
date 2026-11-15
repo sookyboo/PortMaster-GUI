@@ -168,6 +168,26 @@ PortMaster release. An ARM64 machine can test the AArch64 RetroDECK bundle;
 CI remains responsible for also building and including the x86_64 helper
 artifacts from its native runner.
 
+The local script keeps Podman's per-architecture layer cache in the ignored
+`build/retrodeck-test-zip/podman-cache/` directory. Per-run sockets, runroot,
+and exported artifacts also live under ignored `build/retrodeck-test-zip/`, so
+the build does not place its temporary container store on a small `/tmp`
+filesystem. Podman uses its configured storage driver; the script does not
+force `vfs`, which can duplicate layers and use much more disk. The first
+build still needs enough free space for the images and compiler outputs; later
+runs reuse unchanged layers. If the repository filesystem is small, set
+`RD_BUILD_CACHE_DIR` to a directory on a larger local volume:
+
+```sh
+RD_BUILD_CACHE_DIR=/mnt/large-disk/retrodeck-build \
+  ./build_retrodeck_test_zip.sh stable
+```
+
+Only per-run files are removed when the script exits. The Podman layer cache
+persists between runs; clear it with Podman's `system reset` using the same
+architecture-specific `--root` under `build/retrodeck-test-zip/podman-cache/`
+when you explicitly want to discard the cached build layers.
+
 The mod's Panfrost detection is intentionally separate from packaging. On a
 Panfrost RetroDECK Flatpak, a successful launch should log
 `RetroDECK ARMHF Nox Mesa GLX launch selected` plus either

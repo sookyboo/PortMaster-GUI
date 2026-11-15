@@ -16,31 +16,33 @@ esac
 
 command -v podman >/dev/null || { echo "podman is required" >&2; exit 1; }
 
-WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/retrodeck-test-zip.XXXXXX")"
-mkdir -m 700 "$WORK_DIR/runtime" "$WORK_DIR/storage" "$WORK_DIR/runroot"
+umask 077
+BUILD_ROOT="${RD_BUILD_CACHE_DIR:-$REPO_DIR/build/retrodeck-test-zip}"
+mkdir -p "$BUILD_ROOT/podman-cache/$TOOL_ARCH" "$BUILD_ROOT/runs"
+BUILD_ROOT="$(cd "$BUILD_ROOT" && pwd)"
+CACHE_ROOT="$BUILD_ROOT/podman-cache/$TOOL_ARCH/storage"
+WORK_DIR="$(mktemp -d "$BUILD_ROOT/runs/retrodeck-test-zip.XXXXXX")"
+mkdir -m 700 "$WORK_DIR/runtime" "$WORK_DIR/runroot" "$WORK_DIR/tmp"
 export XDG_RUNTIME_DIR="$WORK_DIR/runtime"
+export TMPDIR="$WORK_DIR/tmp"
 
-# Keep Podman's runtime state out of the host's possibly read-only
-# /run/user/$UID. The vfs driver is slower but works without overlay setup.
-podman_cmd=(podman --root "$WORK_DIR/storage" --runroot "$WORK_DIR/runroot" --storage-driver vfs)
+# Preserve Podman's image/layer cache between runs, while keeping the runtime
+# socket and runroot private to this invocation. Use the configured storage
+# driver instead of forcing VFS, which duplicates layers and consumes extra disk.
+podman_cmd=(podman --root "$CACHE_ROOT" --runroot "$WORK_DIR/runroot")
+if [[ -n "${RD_PODMAN_STORAGE_DRIVER:-}" ]]; then
+  podman_cmd+=(--storage-driver "$RD_PODMAN_STORAGE_DRIVER")
+fi
+echo "Podman build cache: $CACHE_ROOT"
+df -h "$BUILD_ROOT"
 
 cleanup() {
   [[ -d "$WORK_DIR" ]] || return 0
 
-  # This Podman instance has a unique storage root inside WORK_DIR, so reset
-  # only that private store before removing the remaining temporary files.
-  if "${podman_cmd[@]}" system reset --force >/dev/null 2>&1; then
-    rm -rf -- "$WORK_DIR" 2>/dev/null && return 0
-  fi
-
-  # Rootless container layers can be owned by subordinate UIDs on the host.
-  # If Podman's reset fails, remove the private tree from its user namespace.
-  if "${podman_cmd[@]}" unshare rm -rf -- "$WORK_DIR" 2>/dev/null; then
-    return 0
-  fi
-  chmod -R u+rwX -- "$WORK_DIR" 2>/dev/null || true
+  # The cached image store is outside WORK_DIR, so this only removes files
+  # created by the current host process and must not touch the persistent cache.
   rm -rf -- "$WORK_DIR" 2>/dev/null || {
-    echo "Could not clean temporary Podman directory: $WORK_DIR" >&2
+    echo "Could not clean temporary build directory: $WORK_DIR" >&2
     return 1
   }
 }
@@ -48,6 +50,7 @@ trap cleanup EXIT
 
 mkdir -p "$WORK_DIR/tools/$TOOL_ARCH"
 "${podman_cmd[@]}" build \
+  --layers \
   --platform "linux/$CONTAINER_ARCH" \
   --build-arg "RETRODECK_ARCH=$TOOL_ARCH" \
   --file "$REPO_DIR/Dockerfile.retrodeck-tools" \
@@ -56,6 +59,7 @@ mkdir -p "$WORK_DIR/tools/$TOOL_ARCH"
   "$REPO_DIR"
 
 "${podman_cmd[@]}" build \
+  --layers \
   --platform "linux/$CONTAINER_ARCH" \
   --file "$REPO_DIR/experimental/armhf-runtime/Dockerfile" \
   --target artifact \
@@ -63,6 +67,7 @@ mkdir -p "$WORK_DIR/tools/$TOOL_ARCH"
   "$REPO_DIR/experimental/armhf-runtime"
 
 "${podman_cmd[@]}" build \
+  --layers \
   --platform "linux/$CONTAINER_ARCH" \
   --file "$REPO_DIR/experimental/armhf-runtime/Dockerfile.graphics" \
   --target artifact \
