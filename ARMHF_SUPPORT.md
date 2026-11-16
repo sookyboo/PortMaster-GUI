@@ -21,6 +21,16 @@ does not describe a supported general PortMaster feature.
   `DT_NEEDED` names in the port-local directories and RetroDECK's ARMHF bundles.
   The observed Nox failures therefore are not explained by a too-new glibc
   requirement or an obvious missing shared-library dependency.
+- ARMHF execution from RetroDECK's Flatpak on an Apple Silicon Mac may be
+  possible when the AArch64 guest kernel has ARM binfmt/QEMU user emulation
+  enabled, but it is more complex than enabling binfmt alone. Early testing in
+  an Arch Linux ARM guest under UTM's Virtualize mode reached QEMU after binfmt
+  registration. QEMU then needed host-side dependencies such as Capstone and
+  NUMA. The Flatpak may not expose those libraries, and its libc may not match
+  the one against which the guest's `/usr/bin/qemu-arm` was built. The exact
+  interpreter and library namespace used by binfmt inside Flatpak still need
+  confirmation. This remains an unverified runtime path; successful ARMHF
+  package builds in Podman do not demonstrate ARMHF execution in the Flatpak.
 - The ARMHF SDL EGL probe reaches SDL video initialization but has failed to
   create a usable EGL display (`Could not get EGL display`). That EGL test-path
   failure does not prevent the working Mesa GLX configuration below.
