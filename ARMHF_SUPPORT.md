@@ -168,6 +168,23 @@ PortMaster release. An ARM64 machine can test the AArch64 RetroDECK bundle;
 CI remains responsible for also building and including the x86_64 helper
 artifacts from its native runner.
 
+### Apple Silicon Mac / Podman ARMHF emulation
+
+On an M-series Mac, the ARM64 Podman machine does not automatically execute
+ARMHF binaries from Ubuntu package post-install scripts. Before running
+`build_retrodeck_test_zip.sh`, register QEMU's little-endian ARM binfmt handler
+in the Podman VM:
+
+```sh
+sudo podman run --privileged --rm \
+  docker.io/tonistiigi/binfmt:latest --install arm
+```
+
+This was verified to fix the ARMHF package build in
+`build_retrodeck_test_zip.sh` on the Mac. It enables ARM user-mode emulation for
+the build environment; it does not add ARMHF execution support to RetroDECK's
+runtime Flatpak.
+
 The local script keeps Podman's per-architecture layer cache and matching
 runroot in the ignored `build/retrodeck-test-zip/` directory. Per-run sockets
 and exported artifacts also live there, so
